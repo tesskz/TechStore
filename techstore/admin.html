@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - TechStore</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<header>
+    <div class="nav-container">
+        <h1 class="logo">🛍️ TechStore Admin</h1>
+        <nav class="nav-links">
+            <a href="index.html" class="nav-btn">Accueil</a>
+            <a href="panier.html" class="nav-btn">Panier</a>
+        </nav>
+    </div>
+</header>
+
+<main class="admin-container">
+    <h2>Ajouter un produit</h2>
+    <form id="admin-form">
+        <input type="text" id="product-name" placeholder="Nom de l'article" required>
+        <input type="number" id="product-price" placeholder="Prix (€)" required>
+        <input type="text" id="product-img" placeholder="URL de l'image" required>
+        <select id="product-category" required>
+            <option value="">Sélectionner une catégorie</option>
+            <option value="casque">Casques</option>
+            <option value="souris">Souris</option>
+            <option value="clavier">Claviers</option>
+        </select>
+        <button type="submit">Ajouter l'article</button>
+    </form>
+</main>
+
+
+<div class="admin-container">
+    <h2>Supprimer un produit</h2>
+    <form id="admin-form-delete">
+        <input type="text" id="product-name-delete" placeholder="Nom de l'article" required>
+        <button type="submit">Supprimer l'article</button>
+    </form>
+
+
+<script>
+    // ==== Code Admin (mot de passe)
+    const ADMIN_CODE = "admin"; // Modifie ici ton mot de passe
+
+    const access = prompt("Entrez le code admin :");
+    if(access !== ADMIN_CODE) {
+        alert("Code incorrect ! Accès refusé.");
+        window.location.href = "index.html";
+    }
+
+    // ==== Ajouter produit
+    const form = document.getElementById("admin-form");
+    form.addEventListener("submit", function(e) {
+        e.preventDefault();
+
+        const name = document.getElementById("product-name").value;
+        const price = parseFloat(document.getElementById("product-price").value);
+        const img = document.getElementById("product-img").value;
+        const category = document.getElementById("product-category").value;
+
+        // Récupérer les produits existants
+        let products = JSON.parse(localStorage.getItem("products")) || [];
+
+        // Ajouter le nouveau produit
+        products.push({name, price, img, category});
+
+        // Sauvegarder dans localStorage
+        localStorage.setItem("products", JSON.stringify(products));
+
+        alert("Produit ajouté !");
+        form.reset();
+
+        // Supprimer produit
+        const formDelete = document.getElementById("admin-form-delete");
+        formDelete.addEventListener("submit", function(e) {
+            e.preventDefault();
+            const nameToDelete = document.getElementById("product-name-delete").value;      
+
+            // Récupérer les produits existants
+            let products = JSON.parse(localStorage.getItem("products")) || [];
+
+            // Filtrer les produits pour supprimer celui avec le nom correspondant
+            products = products.filter(product => product.name !== nameToDelete);
+
+            // Sauvegarder les produits mis à jour dans localStorage
+            localStorage.setItem("products", JSON.stringify(products));
+
+            alert("Produit supprimé !");
+            formDelete.reset();
+        });
+</script>
+
+</body>
+</html>

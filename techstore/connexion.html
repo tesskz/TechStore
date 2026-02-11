@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Se connecter - TechStore</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<header>
+    <div class="nav-container">
+        <h1 class="logo">🛍️ TechStore</h1>
+        <nav class="nav-links">
+            <a href="index.html" class="nav-btn">Accueil</a>
+            <a href="panier.html" class="nav-btn">
+                Panier (<span id="cart-count">0</span>)
+            </a>
+        </nav>
+    </div>
+</header>
+
+<main class="login-container">
+    <h2>Connexion</h2>
+    <form id="login-form">
+        <input type="text" id="username" placeholder="Nom d'utilisateur" required>
+        <input type="password" id="password" placeholder="Mot de passe" required>
+        <button type="submit">Se connecter</button>
+    </form>
+    <p id="login-message"></p>
+</main>
+
+<script>
+    // Juste un message simulé pour la connexion
+    const form = document.getElementById("login-form");
+    const message = document.getElementById("login-message");
+
+    form.addEventListener("submit", function(e) {
+        e.preventDefault();
+        const username = document.getElementById("username").value;
+        message.textContent = "Bonjour " + username + " ! Vous êtes connecté (simulation).";
+        message.style.color = "green";
+        form.reset();
+    });
+</script>
+
+</body>
+</html>
