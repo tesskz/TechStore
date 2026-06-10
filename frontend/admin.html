@@ -27,12 +27,21 @@
             <input type="text"   id="product-name"     placeholder="Nom du produit"  required>
             <input type="number" id="product-price"    placeholder="Prix (€)" step="0.01" min="0" required>
             <input type="text"   id="product-img"      placeholder="URL de l'image (optionnel)">
-            <select id="product-category" required>
-                <option value="">Sélectionner une catégorie</option>
-                <option value="casque">Casques</option>
-                <option value="souris">Souris</option>
-                <option value="clavier">Claviers</option>
+            <select id="product-platform" required>
+                <option value="">🎮 Plateforme du code jeu</option>
+                <option value="Steam">Steam</option>
+                <option value="Epic Games">Epic Games</option>
+                <option value="Microsoft Store">Microsoft Store</option>
+                <option value="Ubisoft Connect">Ubisoft Connect</option>
+                <option value="EA App">EA App</option>
+                <option value="Battle.net">Battle.net</option>
+                <option value="Rockstar Games">Rockstar Games</option>
+                <option value="GOG">GOG</option>
+                <option value="PlayStation Store">PlayStation Store</option>
+                <option value="Xbox Live">Xbox Live</option>
+                <option value="Nintendo eShop">Nintendo eShop</option>
             </select>
+            <input type="text" id="product-code" placeholder="🔑 Code d'activation (ex: XXXXX-XXXXX-XXXXX)" required>
             <button type="submit">Ajouter le produit</button>
         </form>
         <p id="admin-message"></p>
@@ -78,8 +87,9 @@
             div.className = 'admin-product-row';
             div.innerHTML = `
                 <img src="${prod.img}" alt="${prod.name}" width="50" height="50" style="border-radius:8px;object-fit:cover">
-                <span><strong>${prod.name}</strong> — ${parseFloat(prod.price).toFixed(2)} € 
-                    <em style="color:#888">(${prod.category})</em>
+                <span><strong>${prod.name}</strong> — ${parseFloat(prod.price).toFixed(2)} €
+                    ${prod.platform ? `<span class="platform-badge">${prod.platform}</span>` : ''}
+                    ${prod.activation_code ? `<br><code class="activation-code">🔑 ${prod.activation_code}</code>` : ''}
                 </span>
                 <button class="delete-btn" onclick="handleDeleteProduct(${prod.id}, '${prod.name}')">
                     🗑️ Supprimer
@@ -95,9 +105,10 @@
         const name     = document.getElementById('product-name').value;
         const price    = document.getElementById('product-price').value;
         const img      = document.getElementById('product-img').value;
-        const category = document.getElementById('product-category').value;
+        const platform = document.getElementById('product-platform').value;
+        const code     = document.getElementById('product-code').value;
 
-        const result = await addProduct(name, price, img, category);
+        const result = await addProduct(name, price, img, platform, code);
 
         if (result.product) {
             msg.textContent = '✅ ' + result.message;

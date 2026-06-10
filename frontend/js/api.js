@@ -57,10 +57,10 @@ async function fetchProducts(category = '', search = '') {
   return apiRequest(`/products?${params}`);
 }
 
-async function addProduct(name, price, img, category) {
+async function addProduct(name, price, img, platform, activation_code) {
   return apiRequest('/products', {
     method: 'POST',
-    body: JSON.stringify({ name, price: parseFloat(price), img, category })
+    body: JSON.stringify({ name, price: parseFloat(price), img, platform, activation_code })
   });
 }
 

@@ -1,0 +1,8 @@
+# Dépendances
+node_modules/
+
+# Secrets — ne JAMAIS commiter les identifiants
+backend/.env
+
+# macOS
+.DS_Store

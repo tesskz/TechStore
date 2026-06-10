@@ -22,26 +22,103 @@
 </header>
 
 <main class="login-container">
-    <h2>Connexion</h2>
+    <h2 id="form-title">Connexion</h2>
     <form id="login-form">
-        <input type="text" id="username" placeholder="Nom d'utilisateur" required>
-        <input type="password" id="password" placeholder="Mot de passe" required>
-        <button type="submit">Se connecter</button>
+        <input type="text" id="username" placeholder="Nom d'utilisateur" required autocomplete="username">
+        <input type="password" id="password" placeholder="Mot de passe" required autocomplete="current-password">
+        <button type="submit" id="submit-btn">Se connecter</button>
     </form>
     <p id="login-message"></p>
+    <p class="switch-mode">
+        Pas encore de compte ?
+        <a href="#" id="toggle-mode">Créer un compte</a>
+    </p>
 </main>
 
+<script src="js/api.js"></script>
+<script src="js/script.js"></script>
 <script>
-    // Juste un message simulé pour la connexion
-    const form = document.getElementById("login-form");
-    const message = document.getElementById("login-message");
+    // ─── Connexion / Inscription (vraie API) ──────
+    const form      = document.getElementById('login-form');
+    const message   = document.getElementById('login-message');
+    const formTitle = document.getElementById('form-title');
+    const submitBtn = document.getElementById('submit-btn');
+    const toggle    = document.getElementById('toggle-mode');
+    const switchTxt = document.querySelector('.switch-mode');
 
-    form.addEventListener("submit", function(e) {
+    let mode = 'login'; // 'login' ou 'register'
+
+    // Déjà connecté ? Direction la boutique
+    if (getToken()) window.location.href = 'index.html';
+
+    // Basculer entre connexion et inscription
+    toggle.addEventListener('click', (e) => {
         e.preventDefault();
-        const username = document.getElementById("username").value;
-        message.textContent = "Bonjour " + username + " ! Vous êtes connecté (simulation).";
-        message.style.color = "green";
-        form.reset();
+        mode = (mode === 'login') ? 'register' : 'login';
+        const isLogin = (mode === 'login');
+
+        formTitle.textContent  = isLogin ? 'Connexion' : 'Créer un compte';
+        submitBtn.textContent  = isLogin ? 'Se connecter' : 'S\'inscrire';
+        switchTxt.firstChild.textContent = isLogin ? 'Pas encore de compte ? ' : 'Déjà un compte ? ';
+        toggle.textContent     = isLogin ? 'Créer un compte' : 'Se connecter';
+        message.textContent    = '';
+    });
+
+    // Après connexion : on transfère le panier local (invité) vers la BDD
+    async function fusionnerPanierLocal() {
+        const local = JSON.parse(localStorage.getItem('cart')) || [];
+        for (const item of local) {
+            if (item.id) {
+                try { await addToCartAPI(item.id); } catch {}
+            }
+        }
+        localStorage.removeItem('cart');
+    }
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+
+        submitBtn.disabled = true;
+        message.style.color = '#9bb0d3';
+        message.textContent = '⏳ Un instant...';
+
+        try {
+            // En mode inscription : on crée le compte d'abord
+            if (mode === 'register') {
+                const reg = await registerUser(username, password);
+                if (!reg.user) {
+                    message.style.color = '#ff6b6b';
+                    message.textContent = '❌ ' + (reg.message || 'Erreur lors de l\'inscription.');
+                    return;
+                }
+            }
+
+            // Connexion (directe, ou auto après inscription)
+            const result = await loginUser(username, password);
+
+            if (result.token) {
+                localStorage.setItem('token', result.token);
+                localStorage.setItem('user', JSON.stringify(result.user));
+                await fusionnerPanierLocal();
+
+                message.style.color = '#4ade80';
+                message.textContent = '✅ ' + result.message;
+
+                setTimeout(() => {
+                    window.location.href = (result.user.role === 'admin') ? 'admin.html' : 'index.html';
+                }, 600);
+            } else {
+                message.style.color = '#ff6b6b';
+                message.textContent = '❌ ' + (result.message || 'Identifiants incorrects.');
+            }
+        } catch {
+            message.style.color = '#ff6b6b';
+            message.textContent = '❌ Serveur injoignable. Le backend est-il lancé ?';
+        } finally {
+            submitBtn.disabled = false;
+        }
     });
 </script>
 
