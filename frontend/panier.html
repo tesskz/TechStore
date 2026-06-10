@@ -6,28 +6,38 @@
     <title>Panier - TechStore</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
 
 <header>
-    <h1>🛒 Mon panier</h1>
-
-    <a href="index.html" class="cart-button">
-        Retour à la boutique
-    </a>
+    <div class="nav-container">
+        <h1 class="logo">🛒 Mon panier</h1>
+        <nav class="nav-links">
+            <a href="index.html" class="nav-btn">← Boutique</a>
+            <a href="connexion.html" class="nav-btn">Se connecter</a>
+        </nav>
+    </div>
 </header>
 
 <main>
     <h2>Articles :</h2>
-
     <div id="cart-items"></div>
-
     <h3>Total : <span id="total">0 €</span></h3>
+    <button id="clear-cart" class="clear-btn" style="margin-top:15px;width:auto;padding:10px 20px">
+        🗑️ Vider le panier
+    </button>
+    <p id="guest-notice" style="display:none; color:#777; margin-top:15px; font-size:14px">
+        💡 <a href="connexion.html">Connectez-vous</a> pour sauvegarder votre panier.
+    </p>
 </main>
 
-
+<script src="js/api.js"></script>
 <script src="js/script.js"></script>
+<script>
+    // Afficher le message si pas connecté
+    if (!getToken()) {
+        document.getElementById('guest-notice').style.display = 'block';
+    }
+</script>
+
 </body>
 </html>
-
-

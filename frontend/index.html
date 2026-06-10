@@ -6,35 +6,33 @@
     <title>TechStore</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
 
 <header>
     <div class="nav-container">
         <h1 class="logo">🛍️ TechStore</h1>
-
         <nav class="nav-links">
-             <a href="connexion.html" class="nav-btn">Se connecter</a>
-             <a href="panier.html" class="nav-btn">
-                 Panier (<span id="cart-count">0</span>)
-             </a>
-                <a href="admin.html" class="nav-btn">Admin</a>
-         <input type="text" id="search" placeholder="Rechercher..." class="search-input">
-    <select id="category" class="category-select">
-        <option value="">Toutes les catégories</option>
-        <option value="casque">Casques</option>
-        <option value="souris">Souris</option>
-        <option value="clavier">Claviers</option>
-    </select>
+            <a href="connexion.html" class="nav-btn">Se connecter</a>
+            <a href="panier.html" class="nav-btn">
+                Panier (<span id="cart-count">0</span>)
+            </a>
+            <a href="admin.html" class="nav-btn">Admin</a>
+            <input type="text" id="search" placeholder="Rechercher..." class="search-input">
+            <select id="category" class="category-select">
+                <option value="">Toutes les catégories</option>
+                <option value="casque">Casques</option>
+                <option value="souris">Souris</option>
+                <option value="clavier">Claviers</option>
+            </select>
+        </nav>
     </div>
 </header>
 
-
 <main class="products" id="products-container">
-    <!-- Les produits seront générés ici par JavaScript -->
+    <!-- Produits chargés via l'API -->
 </main>
 
-
+<script src="js/api.js"></script>
 <script src="js/script.js"></script>
 </body>
 </html>

@@ -6,94 +6,121 @@
     <title>Admin - TechStore</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
 
 <header>
     <div class="nav-container">
-        <h1 class="logo">🛍️ TechStore Admin</h1>
+        <h1 class="logo">⚙️ TechStore Admin</h1>
         <nav class="nav-links">
-            <a href="index.html" class="nav-btn">Accueil</a>
-            <a href="panier.html" class="nav-btn">Panier</a>
+            <a href="index.html" class="nav-btn">Boutique</a>
+            <a href="#" class="nav-btn" onclick="logoutUser()">Déconnexion</a>
         </nav>
     </div>
 </header>
 
-<main class="admin-container">
-    <h2>Ajouter un produit</h2>
-    <form id="admin-form">
-        <input type="text" id="product-name" placeholder="Nom de l'article" required>
-        <input type="number" id="product-price" placeholder="Prix (€)" required>
-        <input type="text" id="product-img" placeholder="URL de l'image" required>
-        <select id="product-category" required>
-            <option value="">Sélectionner une catégorie</option>
-            <option value="casque">Casques</option>
-            <option value="souris">Souris</option>
-            <option value="clavier">Claviers</option>
-        </select>
-        <button type="submit">Ajouter l'article</button>
-    </form>
+<main>
+
+    <!-- Ajouter un produit -->
+    <div class="admin-container">
+        <h2>➕ Ajouter un produit</h2>
+        <form id="admin-form">
+            <input type="text"   id="product-name"     placeholder="Nom du produit"  required>
+            <input type="number" id="product-price"    placeholder="Prix (€)" step="0.01" min="0" required>
+            <input type="text"   id="product-img"      placeholder="URL de l'image (optionnel)">
+            <select id="product-category" required>
+                <option value="">Sélectionner une catégorie</option>
+                <option value="casque">Casques</option>
+                <option value="souris">Souris</option>
+                <option value="clavier">Claviers</option>
+            </select>
+            <button type="submit">Ajouter le produit</button>
+        </form>
+        <p id="admin-message"></p>
+    </div>
+
+    <!-- Liste des produits -->
+    <div class="admin-container">
+        <h2>📋 Produits en catalogue</h2>
+        <div id="admin-products-list">
+            <p>Chargement…</p>
+        </div>
+    </div>
+
 </main>
 
-
-<div class="admin-container">
-    <h2>Supprimer un produit</h2>
-    <form id="admin-form-delete">
-        <input type="text" id="product-name-delete" placeholder="Nom de l'article" required>
-        <button type="submit">Supprimer l'article</button>
-    </form>
-
-
+<script src="js/api.js"></script>
+<script src="js/script.js"></script>
 <script>
-    // ==== Code Admin (mot de passe)
-    const ADMIN_CODE = "admin"; // Modifie ici ton mot de passe
+    // ─── Vérification admin ───────────────────
+    const token = getToken();
+    const user  = getCurrentUser();
 
-    const access = prompt("Entrez le code admin :");
-    if(access !== ADMIN_CODE) {
-        alert("Code incorrect ! Accès refusé.");
-        window.location.href = "index.html";
+    if (!token || !user || user.role !== 'admin') {
+        alert('Accès réservé aux administrateurs.');
+        window.location.href = 'connexion.html';
     }
 
-    // ==== Ajouter produit
-    const form = document.getElementById("admin-form");
-    form.addEventListener("submit", function(e) {
-        e.preventDefault();
+    const msg = document.getElementById('admin-message');
 
-        const name = document.getElementById("product-name").value;
-        const price = parseFloat(document.getElementById("product-price").value);
-        const img = document.getElementById("product-img").value;
-        const category = document.getElementById("product-category").value;
+    // ─── Charger la liste des produits ────────
+    async function loadAdminProducts() {
+        const list = document.getElementById('admin-products-list');
+        const products = await fetchProducts();
+        list.innerHTML = '';
 
-        // Récupérer les produits existants
-        let products = JSON.parse(localStorage.getItem("products")) || [];
+        if (!products.length) {
+            list.innerHTML = '<p>Aucun produit.</p>';
+            return;
+        }
 
-        // Ajouter le nouveau produit
-        products.push({name, price, img, category});
-
-        // Sauvegarder dans localStorage
-        localStorage.setItem("products", JSON.stringify(products));
-
-        alert("Produit ajouté !");
-        form.reset();
-
-        // Supprimer produit
-        const formDelete = document.getElementById("admin-form-delete");
-        formDelete.addEventListener("submit", function(e) {
-            e.preventDefault();
-            const nameToDelete = document.getElementById("product-name-delete").value;      
-
-            // Récupérer les produits existants
-            let products = JSON.parse(localStorage.getItem("products")) || [];
-
-            // Filtrer les produits pour supprimer celui avec le nom correspondant
-            products = products.filter(product => product.name !== nameToDelete);
-
-            // Sauvegarder les produits mis à jour dans localStorage
-            localStorage.setItem("products", JSON.stringify(products));
-
-            alert("Produit supprimé !");
-            formDelete.reset();
+        products.forEach(prod => {
+            const div = document.createElement('div');
+            div.className = 'admin-product-row';
+            div.innerHTML = `
+                <img src="${prod.img}" alt="${prod.name}" width="50" height="50" style="border-radius:8px;object-fit:cover">
+                <span><strong>${prod.name}</strong> — ${parseFloat(prod.price).toFixed(2)} € 
+                    <em style="color:#888">(${prod.category})</em>
+                </span>
+                <button class="delete-btn" onclick="handleDeleteProduct(${prod.id}, '${prod.name}')">
+                    🗑️ Supprimer
+                </button>
+            `;
+            list.appendChild(div);
         });
+    }
+
+    // ─── Ajouter un produit ───────────────────
+    document.getElementById('admin-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const name     = document.getElementById('product-name').value;
+        const price    = document.getElementById('product-price').value;
+        const img      = document.getElementById('product-img').value;
+        const category = document.getElementById('product-category').value;
+
+        const result = await addProduct(name, price, img, category);
+
+        if (result.product) {
+            msg.textContent = '✅ ' + result.message;
+            msg.style.color = 'green';
+            this.reset();
+            loadAdminProducts();
+        } else {
+            msg.textContent = '❌ ' + (result.message || 'Erreur.');
+            msg.style.color = 'red';
+        }
+    });
+
+    // ─── Supprimer un produit ─────────────────
+    async function handleDeleteProduct(id, name) {
+        if (!confirm(`Supprimer "${name}" ?`)) return;
+        const result = await deleteProduct(id);
+        msg.textContent = result.message || 'Supprimé.';
+        msg.style.color = result.message?.includes('supprimé') ? 'green' : 'red';
+        loadAdminProducts();
+    }
+
+    // ─── Lancement ────────────────────────────
+    loadAdminProducts();
 </script>
 
 </body>
