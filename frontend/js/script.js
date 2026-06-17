@@ -10,9 +10,10 @@ updateUserNav();
 // ─── Nav dynamique ────────────────────────────
 
 function updateUserNav() {
-  const user      = getCurrentUser();
-  const loginLink = document.querySelector('a[href="connexion.html"]');
-  const adminLink = document.querySelector('a[href="admin.html"]');
+  const user       = getCurrentUser();
+  const loginLink  = document.querySelector('a[href="connexion.html"]');
+  const adminLink  = document.querySelector('a[href="admin.html"]');
+  const ordersLink = document.querySelector('a[href="commandes.html"]');
 
   if (user && loginLink) {
     loginLink.textContent = `👤 ${user.username}`;
@@ -26,6 +27,33 @@ function updateUserNav() {
   if (adminLink && (!user || user.role !== 'admin')) {
     adminLink.style.display = 'none';
   }
+  // "Mes commandes" réservé aux connectés
+  if (ordersLink && !user) {
+    ordersLink.style.display = 'none';
+  }
+}
+
+// ─── Helpers réutilisables (commandes / checkout / admin) ──
+
+// Code série masqué : cliquer pour révéler (délégation globale)
+document.addEventListener('click', (e) => {
+  const sp = e.target.closest('.spoiler');
+  if (sp) sp.classList.toggle('revealed');
+});
+
+function spoilerHTML(code) {
+  return `<span class="spoiler" title="Cliquer pour révéler">${code}</span>`;
+}
+
+// Pastille de statut de commande
+function statutBadge(statut) {
+  const map = {
+    'Délivré':   'statut--delivre',
+    'Annulé':    'statut--annule',
+    'Remboursé': 'statut--rembourse'
+  };
+  const cls = map[statut] || 'statut--delivre';
+  return `<span class="statut-badge ${cls}">${statut}</span>`;
 }
 
 // ─── Compteur panier ──────────────────────────
@@ -65,14 +93,33 @@ function showToast(message, success = true) {
 //  PAGE : index.html — Affichage produits
 // ═══════════════════════════════════════════
 
-async function displayProducts(category = '', search = '') {
+let platformFilterBuilt = false;   // le menu plateforme n'est construit qu'une fois
+
+// Remplit le menu déroulant "plateforme" à partir des plateformes existantes
+function buildPlatformFilter(products) {
+  const sel = document.getElementById('platform');
+  if (!sel) return;
+  const platforms = [...new Set(products.map(p => p.platform).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">🎮 Toutes les plateformes</option>' +
+    platforms.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+async function displayProducts(category = '', search = '', platform = '') {
   const container = document.getElementById('products-container');
   if (!container) return;
 
   container.innerHTML = '<p style="text-align:center;padding:40px">Chargement...</p>';
 
   try {
-    const products = await fetchProducts(category, search);
+    const products = await fetchProducts(category, search, platform);
+
+    // Au tout premier chargement (sans filtre), on remplit le menu plateforme
+    // à partir du catalogue complet → la liste des plateformes reste stable.
+    if (!platformFilterBuilt && !category && !search && !platform) {
+      buildPlatformFilter(products);
+      platformFilterBuilt = true;
+    }
+
     container.innerHTML = '';
 
     if (!Array.isArray(products) || products.length === 0) {
@@ -86,13 +133,18 @@ async function displayProducts(category = '', search = '') {
       div.dataset.id   = prod.id;
       div.dataset.category = prod.category;
 
+      const enRupture = prod.stock != null && prod.stock <= 0;
+
       div.innerHTML = `
         ${prod.platform ? `<span class="platform-badge platform-badge--card">${prod.platform}</span>` : ''}
         <img src="${prod.img}" alt="${prod.name}" loading="lazy">
         <h2>${prod.name}</h2>
         <p>${parseFloat(prod.price).toFixed(2)} €</p>
-        <button onclick="handleAddToCart(${prod.id}, '${prod.name}', ${prod.price})">
-          Ajouter au panier
+        ${prod.stock != null ? `<small class="stock-hint ${enRupture ? 'stock-hint--empty' : ''}">${enRupture ? '⛔ Rupture de stock' : `🔑 ${prod.stock} en stock`}</small>` : ''}
+        <button class="add-cart-btn" data-id="${prod.id}"
+                data-name="${String(prod.name).replace(/"/g, '&quot;')}"
+                data-price="${prod.price}" ${enRupture ? 'disabled' : ''}>
+          ${enRupture ? 'Indisponible' : 'Ajouter au panier'}
         </button>
       `;
       container.appendChild(div);
@@ -122,22 +174,40 @@ async function handleAddToCart(id, name, price) {
   }
 }
 
-// Recherche & filtre (debounce 300ms)
+// Ajout au panier via délégation (gère les noms avec apostrophes/guillemets)
+const productsContainer = document.getElementById('products-container');
+if (productsContainer) {
+  productsContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.add-cart-btn');
+    if (!btn || btn.disabled) return;
+    handleAddToCart(Number(btn.dataset.id), btn.dataset.name, parseFloat(btn.dataset.price));
+  });
+}
+
+// Recherche (debounce 300ms) + filtre par plateforme
 let searchTimeout;
 const searchInput    = document.getElementById('search');
-const categorySelect = document.getElementById('category');
+const platformSelect = document.getElementById('platform');
+
+// Valeurs courantes des filtres (recherche + plateforme)
+function currentFilters() {
+  return {
+    search:   searchInput    ? searchInput.value    : '',
+    platform: platformSelect ? platformSelect.value : ''
+  };
+}
 
 if (searchInput) {
   searchInput.addEventListener('input', function () {
     clearTimeout(searchTimeout);
-    const cat = categorySelect ? categorySelect.value : '';
-    searchTimeout = setTimeout(() => displayProducts(cat, this.value), 300);
+    const f = currentFilters();
+    searchTimeout = setTimeout(() => displayProducts('', f.search, f.platform), 300);
   });
 }
-if (categorySelect) {
-  categorySelect.addEventListener('change', function () {
-    const q = searchInput ? searchInput.value : '';
-    displayProducts(this.value, q);
+if (platformSelect) {
+  platformSelect.addEventListener('change', function () {
+    const f = currentFilters();
+    displayProducts('', f.search, f.platform);
   });
 }
 

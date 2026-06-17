@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commander - TechStore</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- SDK Stripe (obligatoire pour Elements) -->
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+
+<header>
+    <div class="nav-container">
+        <h1 class="logo">💳 Commander</h1>
+        <nav class="nav-links">
+            <a href="index.html" class="nav-btn">← Boutique</a>
+            <a href="panier.html" class="nav-btn">Panier (<span id="cart-count">0</span>)</a>
+            <a href="commandes.html" class="nav-btn">📦 Mes commandes</a>
+            <a href="connexion.html" class="nav-btn">Se connecter</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <h2>Finaliser ma commande</h2>
+
+    <!-- Invité : connexion requise -->
+    <div id="guest-block" class="checkout-card" style="display:none">
+        <p>🔒 Tu dois être connecté pour passer commande et recevoir tes clés.</p>
+        <a href="connexion.html" class="nav-btn" style="display:inline-block;margin-top:14px">Se connecter</a>
+    </div>
+
+    <!-- Récapitulatif + paiement -->
+    <div id="checkout-block" class="checkout-card" style="display:none">
+        <h3 class="checkout-subtitle">🧾 Récapitulatif</h3>
+        <div id="checkout-items"></div>
+
+        <div class="checkout-line">
+            <span>Sous-total</span>
+            <span id="sub-total">0,00 €</span>
+        </div>
+
+        <!-- Code promo -->
+        <div class="promo-row">
+            <input type="text" id="promo-input" placeholder="🎟️ Code promo (ex : WELCOME10)">
+            <button type="button" id="apply-promo" class="promo-btn">Appliquer</button>
+        </div>
+        <p id="promo-feedback" class="promo-feedback"></p>
+
+        <div class="checkout-line checkout-line--discount" id="discount-row" style="display:none">
+            <span>Réduction <span id="discount-code" class="discount-code"></span></span>
+            <span id="discount-amount">−0,00 €</span>
+        </div>
+
+        <div class="checkout-line checkout-total">
+            <span>Total à payer</span>
+            <span id="grand-total">0,00 €</span>
+        </div>
+
+        <!-- Formulaire carte (Stripe Elements) -->
+        <div class="pay-section">
+            <h4 class="pay-title">💳 Paiement par carte</h4>
+            <div id="payment-element"><!-- le champ carte Stripe est injecté ici --></div>
+            <p id="payment-message" class="promo-feedback"></p>
+        </div>
+
+        <button type="button" id="pay-btn">✅ Payer et recevoir mes clés</button>
+    </div>
+
+    <!-- Confirmation après achat -->
+    <div id="confirmation" class="checkout-card" style="display:none">
+        <h3 class="checkout-subtitle">🎉 Commande confirmée !</h3>
+        <p>Merci pour ton achat. Voici tes clés (clique pour révéler) :</p>
+        <div id="confirmation-keys"></div>
+        <div class="checkout-line checkout-total">
+            <span>Payé</span>
+            <span id="confirmation-total">0,00 €</span>
+        </div>
+        <a href="commandes.html" class="nav-btn" style="display:inline-block;margin-top:16px">📦 Voir mes commandes</a>
+        <a href="index.html" class="nav-btn" style="display:inline-block;margin-top:16px">← Retour boutique</a>
+    </div>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/script.js"></script>
+<script>
+    // ─── Logique de la page Checkout (Stripe Elements) ──
+    // 1) afficher le panier   2) monter le champ carte Stripe
+    // 3) (option) code promo   4) payer → Stripe encaisse, puis le serveur
+    //    vérifie le paiement, réserve les clés et renvoie la commande.
+
+    const euros = (n) => Number(n).toFixed(2).replace('.', ',') + ' €';
+
+    let sousTotal    = 0;        // total avant remise (recalculé au chargement)
+    let appliedPromo = null;     // code promo validé : { code, remise } ou null
+
+    let stripe   = null;         // instance Stripe.js (init avec la clé publishable)
+    let elements = null;         // groupe d'Elements (contient le Payment Element)
+
+    const guestBlock    = document.getElementById('guest-block');
+    const checkoutBlock = document.getElementById('checkout-block');
+    const confirmation  = document.getElementById('confirmation');
+    const payBtn        = document.getElementById('pay-btn');
+    const payMsg        = document.getElementById('payment-message');
+
+    // Total réellement dû (sert au montant affiché dans le Payment Element)
+    const currentTotal = () =>
+        Math.max(0, Math.round((sousTotal - (appliedPromo ? appliedPromo.remise : 0)) * 100) / 100);
+
+    // ─── Initialise Stripe (clé publishable récupérée du serveur) ──
+    async function initStripe() {
+        const cfg = await fetchConfig();
+        if (!cfg.stripeActive || !cfg.stripePublishableKey) {
+            payMsg.style.color = '#ff6b6b';
+            payMsg.textContent = '⚠️ Paiement non configuré (clés Stripe manquantes dans backend/.env).';
+            payBtn.disabled = true;
+            return false;
+        }
+        stripe = Stripe(cfg.stripePublishableKey);
+        return true;
+    }
+
+    // ─── Monte le champ carte (mode "deferred" : montant connu, PI créé au paiement) ──
+    function mountPayment() {
+        const cents = Math.round(currentTotal() * 100);
+        if (!stripe || cents < 50) {     // Stripe exige au moins 0,50 €
+            payBtn.disabled = true;
+            if (cents > 0 && cents < 50) payMsg.textContent = 'Montant trop faible pour un paiement par carte.';
+            return;
+        }
+        elements = stripe.elements({
+            mode: 'payment',
+            amount: cents,
+            currency: 'eur',
+            appearance: { theme: 'night', variables: { colorPrimary: '#6c7bff' } }
+        });
+        elements.create('payment').mount('#payment-element');
+        payBtn.disabled = false;
+    }
+
+    // ─── Charge le panier et affiche le récapitulatif ──
+    async function loadCheckout() {
+        if (!getToken()) {                 // commander exige un compte
+            guestBlock.style.display = 'block';
+            return;
+        }
+
+        await initStripe();
+
+        let items = [];
+        try { items = await fetchCart(); } catch { items = []; }
+
+        const container = document.getElementById('checkout-items');
+        container.innerHTML = '';
+        sousTotal = 0;
+
+        // Panier vide → on désactive paiement + promo
+        if (!Array.isArray(items) || items.length === 0) {
+            checkoutBlock.style.display = 'block';
+            container.innerHTML = '<p style="color:var(--muted)">Ton panier est vide. <a href="index.html" style="color:var(--cyan)">Retour à la boutique →</a></p>';
+            payBtn.disabled = true;
+            document.querySelector('.promo-row').style.display = 'none';
+            document.querySelector('.pay-section').style.display = 'none';
+            renderTotals();
+            return;
+        }
+
+        // Une ligne par article + cumul du sous-total
+        items.forEach(item => {
+            const qty  = item.quantity || 1;
+            const line = parseFloat(item.price) * qty;
+            sousTotal += line;
+            const div = document.createElement('div');
+            div.className = 'checkout-item';
+            div.innerHTML = `
+                <span>${item.name}${qty > 1 ? ` <small>×${qty}</small>` : ''}</span>
+                <span>${euros(line)}</span>`;
+            container.appendChild(div);
+        });
+
+        sousTotal = Math.round(sousTotal * 100) / 100;   // évite 0.1+0.2 = 0.30000001
+        checkoutBlock.style.display = 'block';
+        renderTotals();
+        mountPayment();                    // affiche le champ carte
+    }
+
+    // Met à jour l'affichage sous-total / remise / total
+    function renderTotals() {
+        document.getElementById('sub-total').textContent   = euros(sousTotal);
+        document.getElementById('grand-total').textContent = euros(currentTotal());
+
+        const row = document.getElementById('discount-row');
+        if (appliedPromo) {
+            row.style.display = 'flex';
+            document.getElementById('discount-code').textContent   = appliedPromo.code;
+            document.getElementById('discount-amount').textContent = '−' + euros(appliedPromo.remise);
+        } else {
+            row.style.display = 'none';
+        }
+    }
+
+    // Bouton "Appliquer" : on valide le code côté serveur (sans payer encore)
+    document.getElementById('apply-promo').addEventListener('click', async () => {
+        const fb   = document.getElementById('promo-feedback');
+        const code = document.getElementById('promo-input').value.trim();
+        if (!code) { fb.textContent = ''; return; }
+
+        fb.style.color = 'var(--muted)';
+        fb.textContent = '⏳ Vérification...';
+        try {
+            const res = await checkPromo(code, sousTotal);
+            if (res.valid) {
+                appliedPromo = { code: res.code, remise: res.remise };
+                fb.style.color = '#4ade80';
+                fb.textContent = `✅ ${res.code} appliqué — tu économises ${euros(res.remise)}`;
+            } else {
+                appliedPromo = null;
+                fb.style.color = '#ff6b6b';
+                fb.textContent = '❌ ' + (res.message || 'Code invalide');
+            }
+        } catch {
+            appliedPromo = null;
+            fb.style.color = '#ff6b6b';
+            fb.textContent = '❌ Erreur de vérification';
+        }
+        renderTotals();
+        // Le montant a changé → on prévient le Payment Element
+        if (elements) elements.update({ amount: Math.max(50, Math.round(currentTotal() * 100)) });
+    });
+
+    // ─── Affiche l'écran de confirmation avec les clés ──
+    function afficherConfirmation(commande) {
+        checkoutBlock.style.display = 'none';
+        document.getElementById('confirmation-keys').innerHTML = commande.lignes.map(l => `
+            <div class="checkout-item">
+                <span>${l.produit_nom}</span>
+                ${spoilerHTML(l.cle_code)}
+            </div>`).join('');
+        document.getElementById('confirmation-total').textContent = euros(commande.total);
+        confirmation.style.display = 'block';
+        updateCartCount();                 // le panier est désormais vide
+        showToast('Commande validée 🎉');
+    }
+
+    // ─── Étape finale : livraison après paiement réussi ──
+    // Le serveur revérifie le paiement, réserve les clés et crée la commande.
+    async function finaliser(paymentIntentId) {
+        const res = await placeOrder(paymentIntentId, appliedPromo ? appliedPromo.code : '');
+        if (res.commande) {
+            afficherConfirmation(res.commande);
+        } else {
+            // Ex : stock épuisé après paiement → le serveur a remboursé
+            showToast(res.message || 'Erreur lors de la livraison', false);
+            resetPayBtn();
+        }
+    }
+
+    function resetPayBtn() {
+        payBtn.disabled = false;
+        payBtn.textContent = '✅ Payer et recevoir mes clés';
+    }
+
+    // ─── Bouton "Payer" ──
+    payBtn.addEventListener('click', async () => {
+        if (!stripe || !elements) { showToast('Paiement indisponible', false); return; }
+        payBtn.disabled = true;
+        payBtn.textContent = '⏳ Paiement...';
+        payMsg.textContent = '';
+
+        // 1. Valide les champs carte
+        const { error: submitError } = await elements.submit();
+        if (submitError) { showToast(submitError.message, false); resetPayBtn(); return; }
+
+        // 2. Le serveur crée le PaymentIntent (montant autoritatif)
+        let intent;
+        try { intent = await createPaymentIntent(appliedPromo ? appliedPromo.code : ''); }
+        catch { showToast('Serveur injoignable', false); resetPayBtn(); return; }
+        if (!intent.clientSecret) { showToast(intent.message || 'Erreur de paiement', false); resetPayBtn(); return; }
+
+        // 3. Confirme le paiement (carte sans 3DS → reste sur la page)
+        const { error, paymentIntent } = await stripe.confirmPayment({
+            elements,
+            clientSecret: intent.clientSecret,
+            confirmParams: { return_url: window.location.origin + window.location.pathname },
+            redirect: 'if_required'
+        });
+
+        if (error) { showToast(error.message || 'Paiement refusé', false); resetPayBtn(); return; }
+
+        // 4. Paiement OK → on livre
+        if (paymentIntent && paymentIntent.status === 'succeeded') {
+            await finaliser(paymentIntent.id);
+        } else {
+            showToast('Paiement en attente, réessaie.', false);
+            resetPayBtn();
+        }
+    });
+
+    // ─── Retour après authentification 3D Secure (redirection) ──
+    // Stripe revient avec ?payment_intent=...&redirect_status=succeeded
+    async function gererRetour3DS() {
+        const params = new URLSearchParams(window.location.search);
+        const pi = params.get('payment_intent');
+        if (pi && params.get('redirect_status') === 'succeeded' && getToken()) {
+            await finaliser(pi);
+            return true;
+        }
+        return false;
+    }
+
+    // ─── Lancement ──
+    (async () => {
+        if (await gererRetour3DS()) return;   // on revient d'un paiement 3DS
+        loadCheckout();
+    })();
+</script>
+
+</body>
+</html>

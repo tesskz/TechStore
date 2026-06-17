@@ -20,117 +20,347 @@
 
 <main>
 
-    <!-- Ajouter un produit -->
-    <div class="admin-container">
-        <h2>➕ Ajouter un produit</h2>
-        <form id="admin-form">
-            <input type="text"   id="product-name"     placeholder="Nom du produit"  required>
-            <input type="number" id="product-price"    placeholder="Prix (€)" step="0.01" min="0" required>
-            <input type="text"   id="product-img"      placeholder="URL de l'image (optionnel)">
-            <select id="product-platform" required>
-                <option value="">🎮 Plateforme du code jeu</option>
-                <option value="Steam">Steam</option>
-                <option value="Epic Games">Epic Games</option>
-                <option value="Microsoft Store">Microsoft Store</option>
-                <option value="Ubisoft Connect">Ubisoft Connect</option>
-                <option value="EA App">EA App</option>
-                <option value="Battle.net">Battle.net</option>
-                <option value="Rockstar Games">Rockstar Games</option>
-                <option value="GOG">GOG</option>
-                <option value="PlayStation Store">PlayStation Store</option>
-                <option value="Xbox Live">Xbox Live</option>
-                <option value="Nintendo eShop">Nintendo eShop</option>
-            </select>
-            <input type="text" id="product-code" placeholder="🔑 Code d'activation (ex: XXXXX-XXXXX-XXXXX)" required>
-            <button type="submit">Ajouter le produit</button>
-        </form>
-        <p id="admin-message"></p>
+    <!-- Onglets du dashboard -->
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="produits">🎮 Produits</button>
+        <button class="tab-btn" data-tab="commandes">📦 Commandes</button>
+        <button class="tab-btn" data-tab="promos">🎟️ Promotions</button>
     </div>
 
-    <!-- Liste des produits -->
-    <div class="admin-container">
-        <h2>📋 Produits en catalogue</h2>
-        <div id="admin-products-list">
-            <p>Chargement…</p>
+    <!-- ═══ ONGLET PRODUITS ═══ -->
+    <section id="tab-produits" class="tab-panel active">
+        <div class="admin-container">
+            <h2>➕ Ajouter un produit</h2>
+            <form id="admin-form">
+                <input type="text"   id="product-name"  placeholder="Nom du produit" required>
+                <input type="number" id="product-price" placeholder="Prix (€)" step="0.01" min="0" required>
+                <input type="text"   id="product-img"   placeholder="URL de l'image (optionnel)">
+                <select id="product-platform" required>
+                    <option value="">🎮 Plateforme du code jeu</option>
+                    <option value="Steam">Steam</option>
+                    <option value="Epic Games">Epic Games</option>
+                    <option value="Microsoft Store">Microsoft Store</option>
+                    <option value="Ubisoft Connect">Ubisoft Connect</option>
+                    <option value="EA App">EA App</option>
+                    <option value="Battle.net">Battle.net</option>
+                    <option value="Rockstar Games">Rockstar Games</option>
+                    <option value="GOG">GOG</option>
+                    <option value="PlayStation Store">PlayStation Store</option>
+                    <option value="Xbox Live">Xbox Live</option>
+                    <option value="Nintendo eShop">Nintendo eShop</option>
+                </select>
+                <textarea id="product-codes" rows="3" placeholder="🔑 Codes série — une clé par ligne (ex: XXXXX-XXXXX-XXXXX)" required></textarea>
+                <button type="submit">Ajouter le produit</button>
+            </form>
         </div>
-    </div>
+
+        <div class="admin-container">
+            <h2>📋 Produits en catalogue</h2>
+            <div id="admin-products-list"><p>Chargement…</p></div>
+        </div>
+    </section>
+
+    <!-- ═══ ONGLET COMMANDES ═══ -->
+    <section id="tab-commandes" class="tab-panel">
+        <div class="admin-container">
+            <h2>📦 Toutes les commandes</h2>
+            <div id="admin-orders-list"><p>Chargement…</p></div>
+        </div>
+    </section>
+
+    <!-- ═══ ONGLET PROMOTIONS ═══ -->
+    <section id="tab-promos" class="tab-panel">
+        <div class="admin-container">
+            <h2>🎟️ Nouveau code promo</h2>
+            <form id="promo-form">
+                <input type="text" id="promo-code" placeholder="Code (ex: WELCOME10)" required>
+                <select id="promo-type">
+                    <option value="pourcentage">Réduction en %</option>
+                    <option value="montant">Réduction en €</option>
+                </select>
+                <input type="number" id="promo-valeur" placeholder="Valeur (ex: 10)" step="0.01" min="0" required>
+                <button type="submit">Créer le code</button>
+            </form>
+        </div>
+
+        <div class="admin-container">
+            <h2>🏷️ Codes promo existants</h2>
+            <div id="admin-promos-list"><p>Chargement…</p></div>
+        </div>
+    </section>
 
 </main>
 
 <script src="js/api.js"></script>
 <script src="js/script.js"></script>
 <script>
-    // ─── Vérification admin ───────────────────
+    // ─── Garde admin ──────────────────────────
+    // Confort visuel uniquement : on redirige tout de suite un non-admin.
+    // La VRAIE sécurité est côté serveur (verifierAdmin sur chaque route) :
+    // même en forçant l'accès à cette page, l'API refuserait les actions admin.
     const token = getToken();
     const user  = getCurrentUser();
-
     if (!token || !user || user.role !== 'admin') {
         alert('Accès réservé aux administrateurs.');
         window.location.href = 'connexion.html';
     }
 
-    const msg = document.getElementById('admin-message');
+    const euros  = (n) => Number(n).toFixed(2).replace('.', ',') + ' €';
+    const dateFR = (s) => new Date(s).toLocaleDateString('fr-FR', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+    });
 
-    // ─── Charger la liste des produits ────────
+    // ─── Onglets ──────────────────────────────
+    // Au clic : on désactive tous les onglets/panneaux puis on active celui
+    // visé. Les données Commandes/Promos sont chargées à la demande (lazy).
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            if (btn.dataset.tab === 'commandes') loadAdminOrders();
+            if (btn.dataset.tab === 'promos')    loadPromos();
+        });
+    });
+
+    // ═══════════════════════════════════════════
+    //  PRODUITS
+    // ═══════════════════════════════════════════
+    // Affiche le catalogue. Chaque produit a un bouton "Clés" qui ouvre
+    // un panneau de gestion du stock (table cles_jeu côté serveur).
     async function loadAdminProducts() {
         const list = document.getElementById('admin-products-list');
-        const products = await fetchProducts();
-        list.innerHTML = '';
+        const products = await fetchProducts();   // l'admin reçoit aussi stock + stock_total
+        if (!products.length) { list.innerHTML = '<p>Aucun produit.</p>'; return; }
 
-        if (!products.length) {
-            list.innerHTML = '<p>Aucun produit.</p>';
+        // data-id / data-name : lus par la délégation de clic (plus robuste
+        // qu'un onclick avec le nom, qui casserait sur "Assassin's Creed").
+        list.innerHTML = products.map(prod => `
+            <div class="admin-product">
+                <div class="admin-product-row">
+                    <img src="${prod.img}" alt="${prod.name}" width="50" height="50" style="border-radius:8px;object-fit:cover">
+                    <span>
+                        <strong>${prod.name}</strong> — ${parseFloat(prod.price).toFixed(2)} €
+                        ${prod.platform ? `<span class="platform-badge">${prod.platform}</span>` : ''}
+                        <br>
+                        <span class="stock-badge ${prod.stock > 0 ? '' : 'stock-badge--empty'}">
+                            🔑 ${prod.stock} dispo${prod.stock_total != null ? ` / ${prod.stock_total}` : ''}
+                        </span>
+                    </span>
+                    <button class="nav-btn js-keys" data-id="${prod.id}">🔑 Clés</button>
+                    <button class="delete-btn js-del-product" data-id="${prod.id}" data-name="${prod.name}">🗑️</button>
+                </div>
+                <div class="keys-panel" id="keys-${prod.id}" style="display:none"></div>
+            </div>`).join('');
+    }
+
+    // Ouvre (et remplit) le panneau de gestion des clés d'un produit :
+    // liste des clés + leur statut, et un champ pour en ajouter.
+    async function openKeys(id) {
+        const panel = document.getElementById('keys-' + id);
+        panel.style.display = 'block';
+        panel.innerHTML = '<p style="color:var(--muted);font-size:13px">Chargement des clés…</p>';
+        const keys = await fetchProductKeys(id);
+        // Une clé "vendu" ne peut pas être supprimée (pas de bouton ✕)
+        const rows = keys.map(k => `
+            <div class="key-row">
+                <code class="activation-code">${k.code}</code>
+                <span class="key-statut ${k.statut === 'vendu' ? 'key-statut--sold' : 'key-statut--free'}">${k.statut}</span>
+                ${k.statut === 'disponible' ? `<button class="delete-btn js-del-key" data-cle="${k.id}" data-prod="${id}">✕</button>` : ''}
+            </div>`).join('');
+        panel.innerHTML = `
+            <div class="keys-list">${rows || '<p style="color:var(--muted);font-size:13px">Aucune clé.</p>'}</div>
+            <div class="keys-add">
+                <textarea class="js-keys-input" rows="2" placeholder="Ajouter des clés (une par ligne)"></textarea>
+                <button class="js-add-keys" data-prod="${id}">➕ Ajouter au stock</button>
+            </div>`;
+    }
+
+    // Bouton "Clés" : ouvre si fermé, ferme si déjà ouvert
+    function toggleKeys(id) {
+        const panel = document.getElementById('keys-' + id);
+        if (panel.style.display === 'block') panel.style.display = 'none';
+        else openKeys(id);
+    }
+
+    // Un seul écouteur sur la liste gère TOUS les boutons (délégation
+    // d'événement) : pratique car les boutons sont recréés à chaque refresh.
+    document.getElementById('admin-products-list').addEventListener('click', async (e) => {
+        const keysBtn = e.target.closest('.js-keys');
+        if (keysBtn) return toggleKeys(keysBtn.dataset.id);
+
+        const delBtn = e.target.closest('.js-del-product');
+        if (delBtn) {
+            if (!confirm(`Supprimer "${delBtn.dataset.name}" et toutes ses clés ?`)) return;
+            const r = await deleteProduct(delBtn.dataset.id);
+            showToast(r.message || 'Supprimé');
+            loadAdminProducts();
             return;
         }
 
-        products.forEach(prod => {
-            const div = document.createElement('div');
-            div.className = 'admin-product-row';
-            div.innerHTML = `
-                <img src="${prod.img}" alt="${prod.name}" width="50" height="50" style="border-radius:8px;object-fit:cover">
-                <span><strong>${prod.name}</strong> — ${parseFloat(prod.price).toFixed(2)} €
-                    ${prod.platform ? `<span class="platform-badge">${prod.platform}</span>` : ''}
-                    ${prod.activation_code ? `<br><code class="activation-code">🔑 ${prod.activation_code}</code>` : ''}
-                </span>
-                <button class="delete-btn" onclick="handleDeleteProduct(${prod.id}, '${prod.name}')">
-                    🗑️ Supprimer
-                </button>
-            `;
-            list.appendChild(div);
-        });
-    }
+        // Supprimer une clé disponible
+        const delKey = e.target.closest('.js-del-key');
+        if (delKey) {
+            const r = await deleteProductKey(delKey.dataset.cle);
+            showToast(r.message || 'Clé supprimée', !!r.message);
+            // On reconstruit la liste (stock à jour) puis on rouvre le panneau
+            await loadAdminProducts();
+            openKeys(delKey.dataset.prod);
+            return;
+        }
 
-    // ─── Ajouter un produit ───────────────────
-    document.getElementById('admin-form').addEventListener('submit', async function(e) {
+        // Ajouter des clés au stock (une par ligne dans le textarea)
+        const addKeys = e.target.closest('.js-add-keys');
+        if (addKeys) {
+            const id = addKeys.dataset.prod;
+            const ta = document.getElementById('keys-' + id).querySelector('.js-keys-input');
+            const codes = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+            if (!codes.length) { showToast('Aucune clé saisie', false); return; }
+            const r = await addProductKeys(id, codes);
+            showToast(r.message || 'Clés ajoutées');
+            await loadAdminProducts();
+            openKeys(id);
+            return;
+        }
+    });
+
+    // Formulaire "Ajouter un produit" : le textarea contient une clé par
+    // ligne → on les transforme en tableau avant l'envoi.
+    document.getElementById('admin-form').addEventListener('submit', async function (e) {
         e.preventDefault();
         const name     = document.getElementById('product-name').value;
         const price    = document.getElementById('product-price').value;
         const img      = document.getElementById('product-img').value;
         const platform = document.getElementById('product-platform').value;
-        const code     = document.getElementById('product-code').value;
+        const codes    = document.getElementById('product-codes').value
+                            .split('\n').map(s => s.trim()).filter(Boolean);  // nettoie lignes vides
 
-        const result = await addProduct(name, price, img, platform, code);
+        if (!codes.length) { showToast('Ajoute au moins une clé', false); return; }
 
-        if (result.product) {
-            msg.textContent = '✅ ' + result.message;
-            msg.style.color = 'green';
+        const r = await addProduct(name, price, img, platform, codes);
+        if (r.product) {
+            showToast('✅ ' + r.message);
             this.reset();
             loadAdminProducts();
         } else {
-            msg.textContent = '❌ ' + (result.message || 'Erreur.');
-            msg.style.color = 'red';
+            showToast('❌ ' + (r.message || 'Erreur'), false);
         }
     });
 
-    // ─── Supprimer un produit ─────────────────
-    async function handleDeleteProduct(id, name) {
-        if (!confirm(`Supprimer "${name}" ?`)) return;
-        const result = await deleteProduct(id);
-        msg.textContent = result.message || 'Supprimé.';
-        msg.style.color = result.message?.includes('supprimé') ? 'green' : 'red';
-        loadAdminProducts();
+    // ═══════════════════════════════════════════
+    //  COMMANDES
+    // ═══════════════════════════════════════════
+    // Toutes les commandes de tous les clients. L'admin voit les clés en
+    // clair (il les gère) et peut changer le statut via le menu déroulant.
+    async function loadAdminOrders() {
+        const box = document.getElementById('admin-orders-list');
+        box.innerHTML = '<p style="color:var(--muted)">Chargement…</p>';
+        const orders = await fetchAllOrders();
+        if (!Array.isArray(orders) || !orders.length) {
+            box.innerHTML = '<p style="color:var(--muted)">Aucune commande.</p>';
+            return;
+        }
+        box.innerHTML = orders.map(cmd => `
+            <div class="order-card">
+                <div class="order-head">
+                    <div>
+                        <strong>Commande #${cmd.id}</strong>
+                        <span class="order-date">👤 ${cmd.username} · ${dateFR(cmd.created_at)}</span>
+                    </div>
+                    <select class="statut-select js-statut" data-id="${cmd.id}">
+                        ${['Délivré', 'Annulé', 'Remboursé'].map(s =>
+                            `<option ${s === cmd.statut ? 'selected' : ''}>${s}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="order-lines">
+                    ${cmd.lignes.map(l => `
+                        <div class="order-line">
+                            <span>${l.produit_nom} — <span class="order-price">${euros(l.prix)}</span></span>
+                            <code class="activation-code">${l.cle_code}</code>
+                        </div>`).join('')}
+                </div>
+                <div class="order-foot">
+                    ${cmd.code_promo ? `<span class="discount-code">🎟️ ${cmd.code_promo} (−${euros(cmd.remise)})</span>` : '<span></span>'}
+                    <span>Total : <strong>${euros(cmd.total)}</strong></span>
+                </div>
+            </div>`).join('');
     }
 
-    // ─── Lancement ────────────────────────────
+    // Changement de statut : déclenché dès qu'on choisit une autre valeur.
+    // Les clés déjà délivrées restent "vendu" (jamais reprises au client).
+    document.getElementById('admin-orders-list').addEventListener('change', async (e) => {
+        const sel = e.target.closest('.js-statut');
+        if (!sel) return;
+        const r = await updateOrderStatus(sel.dataset.id, sel.value);
+        showToast(r.message || 'Statut mis à jour', !!r.statut);
+    });
+
+    // ═══════════════════════════════════════════
+    //  PROMOTIONS
+    // ═══════════════════════════════════════════
+    // Liste des codes promo. Un code peut être désactivé sans être supprimé
+    // (data-actif retient son état pour le bouton activer/désactiver).
+    async function loadPromos() {
+        const box = document.getElementById('admin-promos-list');
+        box.innerHTML = '<p style="color:var(--muted)">Chargement…</p>';
+        const promos = await fetchPromos();
+        if (!Array.isArray(promos) || !promos.length) {
+            box.innerHTML = '<p style="color:var(--muted)">Aucun code promo.</p>';
+            return;
+        }
+        box.innerHTML = promos.map(p => `
+            <div class="promo-card ${p.actif ? '' : 'promo-card--off'}">
+                <div>
+                    <strong class="promo-code-tag">${p.code}</strong>
+                    <span class="promo-meta">${p.type === 'pourcentage' ? `−${parseFloat(p.valeur)}%` : `−${euros(p.valeur)}`}</span>
+                    ${p.actif ? '' : '<span class="promo-meta promo-meta--off">inactif</span>'}
+                </div>
+                <div class="promo-actions">
+                    <button class="nav-btn js-toggle-promo" data-id="${p.id}" data-actif="${p.actif}">${p.actif ? '⏸️ Désactiver' : '▶️ Activer'}</button>
+                    <button class="delete-btn js-del-promo" data-id="${p.id}">🗑️</button>
+                </div>
+            </div>`).join('');
+    }
+
+    // Formulaire "Nouveau code promo" : type = pourcentage (%) ou montant (€)
+    document.getElementById('promo-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const code   = document.getElementById('promo-code').value;
+        const type   = document.getElementById('promo-type').value;
+        const valeur = document.getElementById('promo-valeur').value;
+        const r = await addPromo(code, type, valeur);
+        if (r.promo) {
+            showToast('✅ ' + r.message);
+            this.reset();
+            loadPromos();
+        } else {
+            showToast('❌ ' + (r.message || 'Erreur'), false);
+        }
+    });
+
+    document.getElementById('admin-promos-list').addEventListener('click', async (e) => {
+        // Activer / désactiver : on envoie l'état inverse de l'état actuel
+        const t = e.target.closest('.js-toggle-promo');
+        if (t) {
+            const nouvelEtat = t.dataset.actif === '1' ? false : true;
+            const r = await togglePromo(t.dataset.id, nouvelEtat);
+            showToast(r.message || 'Mis à jour');
+            loadPromos();
+            return;
+        }
+        // Supprimer définitivement le code
+        const d = e.target.closest('.js-del-promo');
+        if (d) {
+            if (!confirm('Supprimer ce code promo ?')) return;
+            const r = await deletePromo(d.dataset.id);
+            showToast(r.message || 'Supprimé');
+            loadPromos();
+            return;
+        }
+    });
+
+    // ─── Lancement (onglet Produits par défaut) ──
     loadAdminProducts();
 </script>
 

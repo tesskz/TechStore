@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mes commandes - TechStore</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+    <div class="nav-container">
+        <h1 class="logo">📦 Mes commandes</h1>
+        <nav class="nav-links">
+            <a href="index.html" class="nav-btn">← Boutique</a>
+            <a href="panier.html" class="nav-btn">Panier (<span id="cart-count">0</span>)</a>
+            <a href="connexion.html" class="nav-btn">Se connecter</a>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <h2>Historique de commandes</h2>
+    <div id="orders-list"><p style="text-align:center;color:var(--muted)">Chargement…</p></div>
+</main>
+
+<script src="js/api.js"></script>
+<script src="js/script.js"></script>
+<script>
+    // Page "Mes commandes" : historique du client connecté.
+    // Chaque commande affiche son statut (badge) et ses clés en spoiler.
+
+    const euros = (n) => Number(n).toFixed(2).replace('.', ',') + ' €';
+    // Date lisible en français : "17 juin 2026, 14:30"
+    const dateFR = (s) => new Date(s).toLocaleDateString('fr-FR', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    async function loadOrders() {
+        const list = document.getElementById('orders-list');
+
+        // Pas connecté → on ne peut pas récupérer l'historique
+        if (!getToken()) {
+            list.innerHTML = '<p style="text-align:center;color:var(--muted)">🔒 <a href="connexion.html" style="color:var(--cyan)">Connecte-toi</a> pour voir tes commandes.</p>';
+            return;
+        }
+
+        let orders = [];
+        try { orders = await fetchMyOrders(); } catch { orders = []; }
+
+        if (!Array.isArray(orders) || orders.length === 0) {
+            list.innerHTML = '<p style="text-align:center;color:var(--muted)">Aucune commande pour l\'instant. <a href="index.html" style="color:var(--cyan)">Vers la boutique →</a></p>';
+            return;
+        }
+
+        // Une carte par commande. statutBadge() et spoilerHTML() viennent de script.js.
+        list.innerHTML = orders.map(cmd => `
+            <div class="order-card">
+                <div class="order-head">
+                    <div>
+                        <strong>Commande #${cmd.id}</strong>
+                        <span class="order-date">${dateFR(cmd.created_at)}</span>
+                    </div>
+                    ${statutBadge(cmd.statut)}
+                </div>
+                <div class="order-lines">
+                    ${cmd.lignes.map(l => `
+                        <div class="order-line">
+                            <span>${l.produit_nom} — <span class="order-price">${euros(l.prix)}</span></span>
+                            ${spoilerHTML(l.cle_code)}  <!-- clé floutée, clic pour révéler -->
+                        </div>`).join('')}
+                </div>
+                <div class="order-foot">
+                    <!-- Rappel du code promo utilisé (s'il y en a un) -->
+                    ${cmd.code_promo ? `<span class="discount-code">🎟️ ${cmd.code_promo} (−${euros(cmd.remise)})</span>` : '<span></span>'}
+                    <span>Total : <strong>${euros(cmd.total)}</strong></span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    loadOrders();   // au chargement de la page
+</script>
+
+</body>
+</html>
