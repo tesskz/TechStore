@@ -7,7 +7,7 @@
 const db     = require('../config/db');
 const bcrypt = require('bcryptjs');
 
-// Compte administrateur créé par défaut
+// Compte administrateur créé par défaut pour les tests et la démo.
 const ADMIN_USERNAME = 'malek';
 const ADMIN_PASSWORD = 'admin';
 
